@@ -3,6 +3,6 @@ Type=Application
 Encoding=UTF-8
 Name=Lenovo Vantage
 Comment=Lenovo Vantage is a free utility software designed by the electronics manufacturing and technology company Lenovo.
-Exec=/usr/bin/vantage %f
+Exec=/usr/bin/vantage
 Icon=/usr/share/icons/hicolor/scalable/apps/vantage.png
 Terminal=False
