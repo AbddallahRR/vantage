@@ -2,10 +2,13 @@
 
 #Requirement: zenity, xinput, networkmanager, pulseaudio or pipewire-pulse
 #Authors: Nizam (nizam@europe.com), Lanchon (https://github.com/Lanchon)
+#Patched for IdeaPad Gaming 3 (lenovo_wmi_gamezone): fan control now uses
+#/sys/firmware/acpi/platform_profile instead of the legacy VPC2004/fan_mode node.
 
 ENABLE_FAN_MODE=1
 
 VPC="/sys/bus/platform/devices/VPC2004\:*"
+PLATFORM_PROFILE="/sys/firmware/acpi/platform_profile"
 
 touchpad_id="$(xinput list | grep "Touchpad" | cut -d '=' -f2 | awk '{print $1}')"
 
@@ -18,11 +21,14 @@ get_usb_charging_status() {
 }
 
 get_fan_mode_status() {
-    cat $VPC/fan_mode | awk '{
-        if ($1 == "133" || $1 == "0") print "Super Silent";
-        else if ($1 == "1") print "Standard";
-        else if ($1 == "2") print "Dust Cleaning";
-        else if ($1 == "4") print "Efficient Thermal Dissipation";
+    # On gaming models (lenovo_wmi_gamezone) fan behavior is controlled via
+    # the standard ACPI platform_profile interface, not VPC2004/fan_mode.
+    cat "$PLATFORM_PROFILE" | awk '{
+        if ($1 == "low-power") print "Low Power";
+        else if ($1 == "balanced") print "Balanced";
+        else if ($1 == "performance") print "Performance";
+        else if ($1 == "custom") print "Custom";
+        else print $1;
     }'
 }
 
@@ -64,7 +70,7 @@ main() {
         local options=()
         test -f $VPC/conservation_mode && options+=("Conservation Mode" "$(get_conservation_mode_status)")
         test -f $VPC/usb_charging && options+=("Always-On USB" "$(get_usb_charging_status)")
-        test -f $VPC/fan_mode && test "$ENABLE_FAN_MODE" = 1 && options+=("Fan Mode" "$(get_fan_mode_status)")
+        test -f "$PLATFORM_PROFILE" && test "$ENABLE_FAN_MODE" = 1 && options+=("Fan Mode" "$(get_fan_mode_status)")
         test -f $VPC/fn_lock && options+=("FN Lock" "$(get_fn_lock_status)")
         modinfo -n uvcvideo >/dev/null && options+=("Camera" "$(get_camera_status)")
         which pactl >/dev/null && options+=("Microphone" "$(get_microphone_status)")
@@ -89,16 +95,14 @@ main() {
                 ;;
             "Fan Mode")
                 local submenu="$(show_submenu "Fan Mode" "$(get_fan_mode_status)" --height 250 --width 300 \
-                    "Super Silent" \
-                    "Standard" \
-                    "Dust Cleaning" \
-                    "Efficient Thermal Dissipation" \
+                    "Low Power" \
+                    "Balanced" \
+                    "Performance" \
                 )"
                 case "$submenu" in
-                    "Super Silent") echo "0" | pkexec tee $VPC/fan_mode ;;
-                    "Standard") echo "1" | pkexec tee $VPC/fan_mode ;;
-                    "Dust Cleaning") echo "2" | pkexec tee $VPC/fan_mode ;;
-                    "Efficient Thermal Dissipation") echo "4" | pkexec tee $VPC/fan_mode ;;
+                    "Low Power") echo "low-power" | pkexec tee "$PLATFORM_PROFILE" ;;
+                    "Balanced") echo "balanced" | pkexec tee "$PLATFORM_PROFILE" ;;
+                    "Performance") echo "performance" | pkexec tee "$PLATFORM_PROFILE" ;;
                 esac
                 ;;
             "FN Lock")
@@ -147,4 +151,3 @@ main() {
 }
 
 main "$@"
-
